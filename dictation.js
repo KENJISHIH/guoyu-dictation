@@ -9,7 +9,22 @@ const DICTATION = {
     stepMaxMs: 12000,            // 單段播音最多等多久（音檔壞掉時不會卡死）
     randomCount: 10,             // 「隨機抽題」一次幾題
     graduateStreak: 3,           // 錯字複習：連續答對幾次就移出
+    inkGraceMs: 2000,            // iPad 手寫：時間到了但她 2 秒內還有下筆，就先不換題
+    minPadBoxes: 4,              // iPad 手寫格子最少幾格
 };
+
+// iPad 手寫格子數：用整課最長的詞決定，所有題目一樣多格（格數不能洩漏這題幾個字）
+function padBoxes(lesson) {
+    const longest = Math.max(0, ...lesson.items.map(it => Array.from(it.word).length));
+    return Math.max(DICTATION.minPadBoxes, longest);
+}
+
+// 倒數結束了沒：時間到，而且（不是手寫模式，或筆已離開且離最後一筆超過 inkGraceMs）
+function countdownDone(leftMs, now, ink) {
+    if (leftMs > 0) return false;
+    if (!ink) return true;
+    return !ink.penDown && now - ink.lastInk >= DICTATION.inkGraceMs;
+}
 
 // 已註冊的課（各 lessonNN_data.js 呼叫 registerLesson）
 const LESSONS = [];
@@ -88,5 +103,5 @@ function markNewChars(word, newChars) {
 }
 
 if (typeof module !== 'undefined') {
-    module.exports = { DICTATION, LESSONS, registerLesson, itemKey, shuffle, buildQuiz, emptyProgress, applyResults, markNewChars };
+    module.exports = { DICTATION, LESSONS, registerLesson, itemKey, shuffle, buildQuiz, emptyProgress, applyResults, markNewChars, padBoxes, countdownDone };
 }

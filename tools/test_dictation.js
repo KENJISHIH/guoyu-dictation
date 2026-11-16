@@ -83,4 +83,20 @@ t('markNewChars 標出生字', () => {
     assert.deepStrictEqual(m.map(c => c.isNew), [true, true, true, false]);
 });
 
+t('手寫格子：第七課最長 4 字 → 4 格；短課也至少 4 格；長詞會撐開', () => {
+    assert.strictEqual(D.padBoxes(L), 4);
+    assert.strictEqual(D.padBoxes({ items: [{ word: '老街' }] }), 4);
+    assert.strictEqual(D.padBoxes({ items: [{ word: '一二三四五' }] }), 5);
+});
+t('倒數：紙上模式時間到就結束', () => {
+    assert.strictEqual(D.countdownDone(100, 0, null), false);
+    assert.strictEqual(D.countdownDone(0, 0, null), true);
+});
+t('倒數：手寫中（筆在畫面上、或 2 秒內剛寫過）不換題', () => {
+    assert.strictEqual(D.countdownDone(0, 10000, { penDown: true, lastInk: 0 }), false);
+    assert.strictEqual(D.countdownDone(0, 10000, { penDown: false, lastInk: 9000 }), false);
+    assert.strictEqual(D.countdownDone(0, 10000, { penDown: false, lastInk: 8000 }), true);
+    assert.strictEqual(D.countdownDone(500, 10000, { penDown: false, lastInk: 0 }), false);
+});
+
 console.log(`\n${n} 項全部通過`);

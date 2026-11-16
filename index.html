@@ -22,7 +22,7 @@
         font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
     header { padding: 14px 16px 6px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     header h1 { font-size: 20px; margin: 0; flex: 1; }
-    select, button { font: inherit; }
+    select, button { font: inherit; touch-action: manipulation; }
     select { padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }
     nav { display: flex; gap: 6px; padding: 6px 16px 10px; }
     nav button { flex: 1; padding: 10px 4px; border: none; border-radius: 12px; background: var(--card);
@@ -83,6 +83,22 @@
     .score { text-align: center; font-size: 44px; font-weight: 700; margin: 6px 0; }
     .score small { font-size: 18px; color: var(--muted); font-weight: 400; }
 
+    /* iPad 手寫 */
+    .stage.compact { padding: 14px 12px; }
+    .stage.compact .qno { font-size: 34px; }
+    .stage.compact .status { font-size: 17px; margin: 6px 0; }
+    .stage.compact .bar { margin: 6px 0 12px; }
+    .stage.compact .ctrls { grid-template-columns: repeat(4, 1fr); }
+    .stage.compact .ctrls button { padding: 10px 4px; font-size: 15px; }
+    .padwrap { margin-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    #pad { background: #fff; border-radius: 6px; touch-action: none; -webkit-user-select: none; user-select: none;
+        -webkit-touch-callout: none; display: block; }
+    .padtools { display: flex; gap: 10px; }
+    .padtools button { padding: 10px 18px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-size: 16px; }
+    .row.ink-row { flex-wrap: wrap; }
+    .row .inkbox { flex-basis: 100%; display: flex; align-items: center; gap: 8px; padding-left: 44px; color: var(--muted); font-size: 13px; }
+    .row canvas.ink { background: #fff; border-radius: 4px; }
+
     /* 錯字 */
     .dots { font-size: 13px; color: var(--muted); }
     .empty { text-align: center; color: var(--muted); padding: 30px 10px; }
@@ -112,8 +128,8 @@
     const PREF_KEY = 'guoyu_prefs';
     let lesson = LESSONS[LESSONS.length - 1];
     let progress = loadJSON(PROGRESS_KEY) || emptyProgress();
-    let prefs = Object.assign({ pause: DICTATION.defaultPause, mode: 'all' }, loadJSON(PREF_KEY) || {});
-    let dict = { phase: 'setup', items: [], index: 0, token: 0, paused: false, marks: [] };
+    let prefs = Object.assign({ pause: DICTATION.defaultPause, mode: 'all', writeOn: 'paper' }, loadJSON(PREF_KEY) || {});
+    let dict = { phase: 'setup', items: [], index: 0, token: 0, paused: false, marks: [], ink: [], onPad: false };
     const audio = new Audio();
 
     function loadJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
@@ -232,7 +248,11 @@
         if (dict.phase === 'setup') {
             const wrongN = lessonWrongKeys().length;
             el.innerHTML = `
-                <p class="hint">準備好紙和筆。每題會念「第幾題、詞、課文句子、再念一次詞」，聽完寫在紙上，全部寫完再對答案。</p>
+                <p class="hint">每題會念「第幾題、詞、課文句子、再念一次詞」，聽完寫下來，全部寫完再對答案。</p>
+                <div class="panel"><h2>寫在哪裡？</h2><div class="opts">
+                    <button class="opt ${prefs.writeOn === 'paper' ? 'sel' : ''}" onclick="setPref('writeOn','paper')">📄 紙上</button>
+                    <button class="opt ${prefs.writeOn === 'pad' ? 'sel' : ''}" onclick="setPref('writeOn','pad')">✏️ iPad 上（用筆寫）</button>
+                </div></div>
                 <div class="panel"><h2>考哪些？</h2><div class="opts">${MODES.map(m => {
                     const n = m.id === 'wrong' ? wrongN : quizFor(m.id).length;
                     return `<button class="opt ${prefs.mode === m.id ? 'sel' : ''}" ${n ? '' : 'disabled'}
@@ -244,7 +264,7 @@
                 <button class="big" id="dict-start" onclick="startDictation()" ${quizFor(prefs.mode).length ? '' : 'disabled'}>▶ 開始聽寫（${quizFor(prefs.mode).length} 題）</button>`;
         } else if (dict.phase === 'running') {
             el.innerHTML = `
-                <div class="panel stage">
+                <div class="panel stage ${dict.onPad ? 'compact' : ''}">
                     <div class="qno">第 <span id="d-no">${dict.index + 1}</span> 題</div>
                     <div class="of">共 ${dict.items.length} 題</div>
                     <div class="status" id="d-status"></div>
@@ -255,31 +275,45 @@
                         <button onclick="nextQuestion()">⏭ 下一題</button>
                         <button class="stop" onclick="if (confirmEnd()) endDictation(true)">✖ 不考了</button>
                     </div>
+                    ${dict.onPad ? `<div class="padwrap">
+                        <canvas id="pad"></canvas>
+                        <div class="padtools">
+                            <button onclick="padUndo()">↩︎ 擦掉一筆</button>
+                            <button onclick="padClear()">🗑 全部擦掉</button>
+                        </div>
+                    </div>` : ''}
                 </div>`;
         } else if (dict.phase === 'check') {
             el.innerHTML = `
-                <p class="hint">拿紙對答案。寫錯的按一下變成 <b style="color:var(--accent)">✗</b>（筆畫、部首錯也算錯），對完按「完成批改」。</p>
+                <p class="hint">${dict.onPad ? '看看自己寫的和正確答案一不一樣' : '拿紙對答案'}。寫錯的按一下變成 <b style="color:var(--accent)">✗</b>（筆畫、部首錯也算錯），對完按「完成批改」。</p>
                 <div class="rows">${dict.items.map((q, i) => `
-                    <div class="row ${dict.marks[i] ? '' : 'bad'}" id="row-${i}">
+                    <div class="row ${dict.onPad ? 'ink-row' : ''} ${dict.marks[i] ? '' : 'bad'}" id="row-${i}">
                         <span class="n">${i + 1}</span>
                         <span class="w">${wordHTML(q.word)}</span>
                         <button onclick="play(wordSrc('${q.lessonId}',${q.no}),'${esc(q.word)}')" aria-label="聽">🔈</button>
                         <button class="mark" onclick="toggleMark(${i})">${dict.marks[i] ? '✓ 對' : '✗ 錯'}</button>
+                        ${dict.onPad ? `<div class="inkbox">她寫的：<canvas class="ink" data-i="${i}"></canvas></div>` : ''}
                     </div>`).join('')}</div>
                 <button class="big" style="margin-top:14px" onclick="finishCheck()">完成批改</button>`;
+            if (dict.onPad) el.querySelectorAll('canvas.ink').forEach(c => renderInk(c, dict.ink[+c.dataset.i]));
         } else if (dict.phase === 'result') {
             const total = dict.items.length;
             const right = dict.marks.filter(Boolean).length;
-            const wrongItems = dict.items.filter((q, i) => !dict.marks[i]);
+            const wrongIdx = dict.items.map((q, i) => i).filter(i => !dict.marks[i]);
+            const wrongItems = wrongIdx.map(i => dict.items[i]);
             el.innerHTML = `
                 <div class="panel" style="text-align:center">
                     <div class="score">${right}<small> / ${total}</small></div>
                     <div>${right === total ? '🎉 全對！太厲害了' : `錯了 ${total - right} 個，已放進「🔁 錯字」`}</div>
                 </div>
-                ${wrongItems.length ? `<div class="panel"><h2>這次寫錯的</h2><div class="rows">${wrongItems.map(q =>
-                    `<div class="row bad"><span class="n">${q.no}</span><span class="w">${wordHTML(q.word)}</span></div>`).join('')}</div>
+                ${wrongItems.length ? `<div class="panel"><h2>這次寫錯的</h2><div class="rows">${wrongIdx.map(i => {
+                    const q = dict.items[i];
+                    return `<div class="row bad ${dict.onPad ? 'ink-row' : ''}"><span class="n">${q.no}</span><span class="w">${wordHTML(q.word)}</span>
+                        ${dict.onPad ? `<div class="inkbox">她寫的：<canvas class="ink" data-i="${i}"></canvas></div>` : ''}</div>`;
+                }).join('')}</div>
                     <button class="big" style="margin-top:12px" onclick="retryWrong()">🔁 錯的再考一次</button></div>` : ''}
                 <button class="big" style="background:#8a7a72" onclick="dict.phase='setup'; renderDict()">回到聽寫設定</button>`;
+            if (dict.onPad) el.querySelectorAll('canvas.ink').forEach(c => renderInk(c, dict.ink[+c.dataset.i]));
         }
     }
 
@@ -296,7 +330,8 @@
     function startDictation(items) {
         items = items || quizFor(prefs.mode);
         if (!items.length) return;
-        dict = { phase: 'running', items, index: 0, token: dict.token + 1, paused: false, marks: items.map(() => true) };
+        dict = { phase: 'running', items, index: 0, token: dict.token + 1, paused: false, marks: items.map(() => true),
+            ink: items.map(() => []), onPad: prefs.writeOn === 'pad' };
         // 這一下是使用者手勢：讓共用的 <audio> 在手勢裡先 play 一次，iOS 之後才肯自動播
         audio.muted = true;
         audio.src = numSrc(1);
@@ -319,7 +354,7 @@
         }
     }
 
-    // 倒數：暫停時不扣時間
+    // 倒數：暫停時不扣時間；iPad 手寫時，時間到了但她還在寫就等她寫完（見 countdownDone）
     function countdown(ms, alive) {
         return new Promise(resolve => {
             let left = ms, last = Date.now();
@@ -328,9 +363,143 @@
                 if (!dict.paused) left -= now - last;
                 last = now;
                 setBar(Math.max(0, left) / ms);
-                if (!alive() || left <= 0) { clearInterval(tick); resolve(); }
+                const ink = dict.onPad ? { penDown: !!pad.cur, lastInk: pad.lastInk } : null;
+                if (!alive() || countdownDone(left, now, ink)) { clearInterval(tick); resolve(); }
             }, 100);
         });
+    }
+
+    // ─── iPad 手寫板 ──────────────────────────────────
+    // 筆跡存成向量：每筆 [[x, y, 壓力]...]，座標以「一格」為 1（整列寬 = 格數），
+    // 對答案時用同一份資料縮小重畫。偵測到 Apple Pencil 之後就不吃手指／手掌（防誤觸）。
+    const pad = { canvas: null, ctx: null, box: 0, boxes: 4, strokes: [], cur: null, curId: null, penSeen: false, lastInk: 0 };
+
+    function padInit(strokes) {
+        const c = document.getElementById('pad');
+        if (!c) return;
+        pad.canvas = c;
+        pad.strokes = strokes;
+        pad.cur = null;
+        pad.lastInk = 0;
+        pad.boxes = padBoxes(lesson);
+        const avail = c.parentElement.clientWidth;
+        pad.box = Math.max(60, Math.min(170, Math.floor(avail / pad.boxes)));
+        sizeCanvas(c, pad.box * pad.boxes, pad.box);
+        pad.ctx = c.getContext('2d');
+        c.onpointerdown = padDown;
+        c.onpointermove = padMove;
+        c.onpointerup = c.onpointercancel = padUp;
+        padRedraw();
+    }
+
+    function sizeCanvas(c, w, h) {
+        const dpr = window.devicePixelRatio || 1;
+        c.width = Math.round(w * dpr);
+        c.height = Math.round(h * dpr);
+        c.style.width = w + 'px';
+        c.style.height = h + 'px';
+        c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    // 田字格：每格實線外框＋虛線十字
+    function drawGrid(ctx, box, boxes) {
+        ctx.save();
+        ctx.strokeStyle = '#e3b3ae';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < boxes; i++) ctx.strokeRect(i * box + 0.75, 0.75, box - 1.5, box - 1.5);
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < boxes; i++) {
+            ctx.moveTo(i * box + box / 2, 0); ctx.lineTo(i * box + box / 2, box);
+            ctx.moveTo(i * box, box / 2); ctx.lineTo(i * box + box, box / 2);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawSegment(ctx, box, a, b) {
+        ctx.lineWidth = box * 0.04 * (0.55 + b[2] * 0.9);
+        ctx.beginPath();
+        ctx.moveTo(a[0] * box, a[1] * box);
+        ctx.lineTo(b[0] * box, b[1] * box);
+        ctx.stroke();
+    }
+
+    function drawStrokes(ctx, box, strokes) {
+        ctx.strokeStyle = '#222';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        for (const s of strokes) {
+            if (s.length === 1) drawSegment(ctx, box, s[0], s[0]);
+            for (let i = 1; i < s.length; i++) drawSegment(ctx, box, s[i - 1], s[i]);
+        }
+    }
+
+    function padRedraw() {
+        const { ctx, box, boxes } = pad;
+        ctx.clearRect(0, 0, box * boxes, box);
+        drawGrid(ctx, box, boxes);
+        drawStrokes(ctx, box, pad.strokes);
+    }
+
+    function padPoint(e) {
+        const r = pad.canvas.getBoundingClientRect();
+        const p = e.pointerType === 'pen' ? (e.pressure || 0.5) : 0.5;
+        return [(e.clientX - r.left) / pad.box, (e.clientY - r.top) / pad.box, p];
+    }
+
+    function padDown(e) {
+        if (e.pointerType === 'pen') pad.penSeen = true;
+        if (e.pointerType === 'touch' && pad.penSeen) return;   // 用過筆之後，手掌／手指不算
+        if (pad.cur) return;
+        e.preventDefault();
+        try { pad.canvas.setPointerCapture(e.pointerId); } catch (err) {}
+        pad.curId = e.pointerId;
+        pad.cur = [padPoint(e)];
+        pad.strokes.push(pad.cur);
+        pad.lastInk = Date.now();
+        drawStrokes(pad.ctx, pad.box, [pad.cur]);
+    }
+
+    function padMove(e) {
+        if (!pad.cur || e.pointerId !== pad.curId) return;
+        e.preventDefault();
+        const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+        for (const ev of (evs.length ? evs : [e])) {
+            const pt = padPoint(ev);
+            const prev = pad.cur[pad.cur.length - 1];
+            pad.cur.push(pt);
+            pad.ctx.strokeStyle = '#222';
+            pad.ctx.lineCap = 'round';
+            drawSegment(pad.ctx, pad.box, prev, pt);
+        }
+        pad.lastInk = Date.now();
+    }
+
+    function padUp(e) {
+        if (e.pointerId !== pad.curId) return;
+        pad.cur = null;
+        pad.curId = null;
+        pad.lastInk = Date.now();
+    }
+
+    function padUndo() { pad.strokes.pop(); padRedraw(); }
+    function padClear() { pad.strokes.splice(0); padRedraw(); }
+
+    // 對答案時重畫她寫的字（固定 48px 一格）
+    function renderInk(c, strokes) {
+        const box = 48, boxes = padBoxes(lesson);
+        sizeCanvas(c, box * boxes, box);
+        const ctx = c.getContext('2d');
+        drawGrid(ctx, box, boxes);
+        if (!strokes || !strokes.length) {
+            ctx.fillStyle = '#b9a9a0';
+            ctx.font = '14px sans-serif';
+            ctx.fillText('（沒寫）', 8, box / 2 + 5);
+            return;
+        }
+        drawStrokes(ctx, box, strokes);
     }
 
     async function runQuestion(i, withNumber) {
@@ -341,16 +510,19 @@
         dict.stage = 'reading';
         const no = document.getElementById('d-no'); if (no) no.textContent = i + 1;
         const pb = document.getElementById('d-pause'); if (pb) pb.textContent = '⏸ 暫停';
+        if (dict.onPad) padInit(dict.ink[i]);
         setBar(1);
         setStatus('🔊 仔細聽…');
         await readItem(dict.items[i], withNumber ? i + 1 : null, alive);
         if (!alive()) return;
         dict.stage = 'writing';
-        setStatus('✏️ 寫在紙上');
+        setStatus(writeMsg());
         await countdown(prefs.pause * 1000, alive);
         if (!alive()) return;
         nextQuestion();
     }
+
+    function writeMsg() { return dict.onPad ? '✏️ 寫在格子裡' : '✏️ 寫在紙上'; }
 
     function replay() {
         if (dict.phase !== 'running') return;
@@ -370,7 +542,7 @@
         } else if (dict.stage === 'reading') {
             runQuestion(dict.index, false);
         } else {
-            setStatus('✏️ 寫在紙上');
+            setStatus(writeMsg());
         }
     }
 
