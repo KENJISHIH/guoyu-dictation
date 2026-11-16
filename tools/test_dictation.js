@@ -36,9 +36,13 @@ t('每課每題都有詞與句子音檔，第 N 題音檔齊', () => {
     }
 });
 
-t('index.html 有載入每個資料檔', () => {
+t('index.html 有載入每個資料檔，且每個本站 JS 都帶同一個 ?v= 版本號', () => {
     const html = fs.readFileSync(path.join(SITE, 'index.html'), 'utf8');
-    for (const f of lessonFiles) assert(html.includes(`src="${f}"`), f);
+    const srcs = [...html.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]);
+    for (const f of lessonFiles) assert(srcs.some(s => s.startsWith(f + '?v=')), `${f} 沒載入或沒版本號`);
+    assert(srcs.some(s => s.startsWith('dictation.js?v=')), 'dictation.js 沒版本號');
+    const versions = new Set(srcs.map(s => (s.match(/\?v=(\w+)/) || [])[1]));
+    assert.strictEqual(versions.size, 1, '版本號不一致：' + [...versions].join(','));
 });
 
 t('itemKey 補零', () => assert.strictEqual(D.itemKey('l07', 5), 'l07-05'));
