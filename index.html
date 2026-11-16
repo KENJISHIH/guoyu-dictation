@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>國語圈詞聽寫</title>
+<meta name="description" content="國小國語課本圈詞的聽寫練習：聽發音、寫在紙上、再對答案。">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="國語聽寫">
+<meta name="theme-color" content="#d9534f">
+<style>
+    :root {
+        --bg: #fdf6ec; --card: #fff; --ink: #3a2e2a; --muted: #8a7a72;
+        --accent: #d9534f; --accent-soft: #fbe3e1; --ok: #3c9d5d; --ok-soft: #e1f3e6;
+        --line: #eadfd3;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; background: var(--bg); color: var(--ink);
+        font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+    header { padding: 14px 16px 6px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    header h1 { font-size: 20px; margin: 0; flex: 1; }
+    select, button { font: inherit; }
+    select { padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }
+    nav { display: flex; gap: 6px; padding: 6px 16px 10px; }
+    nav button { flex: 1; padding: 10px 4px; border: none; border-radius: 12px; background: var(--card);
+        color: var(--ink); font-size: 16px; box-shadow: 0 1px 0 var(--line); }
+    nav button.active { background: var(--accent); color: #fff; }
+    .badge { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px;
+        background: var(--accent); color: #fff; font-size: 12px; margin-left: 4px; }
+    nav button.active .badge { background: #fff; color: var(--accent); }
+    main { padding: 0 16px 40px; max-width: 760px; margin: 0 auto; }
+    section { display: none; }
+    section.active { display: block; }
+    .hint { color: var(--muted); font-size: 14px; margin: 4px 0 12px; }
+
+    /* 背誦 */
+    .newchars { background: var(--card); border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; font-size: 15px; }
+    .newchars b { font-size: 22px; letter-spacing: 6px; color: var(--accent); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+    .card { background: var(--card); border-radius: 14px; padding: 10px 12px 12px; border: 2px solid transparent;
+        text-align: left; cursor: pointer; position: relative; }
+    .card.playing { border-color: var(--accent); }
+    .card .no { font-size: 13px; color: var(--muted); }
+    .card .w { font-size: 28px; margin-top: 4px; letter-spacing: 2px; }
+    .card .wrongmark { position: absolute; top: 8px; right: 10px; font-size: 12px; color: var(--accent); }
+    .nc { color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+
+    /* 聽寫 */
+    .panel { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+    .panel h2 { font-size: 17px; margin: 0 0 10px; }
+    .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .opt { padding: 10px 14px; border-radius: 12px; border: 2px solid var(--line); background: #fff; font-size: 16px; }
+    .opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+    .opt:disabled { opacity: .4; }
+    .big { display: block; width: 100%; padding: 16px; border: none; border-radius: 14px;
+        background: var(--accent); color: #fff; font-size: 20px; margin-top: 4px; }
+    .big:disabled { opacity: .4; }
+    .stage { text-align: center; padding: 26px 16px; }
+    .stage .qno { font-size: 64px; font-weight: 700; }
+    .stage .of { color: var(--muted); font-size: 16px; }
+    .stage .status { font-size: 20px; margin: 12px 0; min-height: 28px; }
+    .bar { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; margin: 10px 0 18px; }
+    .bar > div { height: 100%; width: 100%; background: var(--accent); transition: width .1s linear; }
+    .ctrls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .ctrls button { padding: 14px 6px; border-radius: 12px; border: none; background: var(--accent-soft);
+        color: var(--ink); font-size: 17px; }
+    .ctrls .stop { background: #eee; }
+
+    /* 對答案 */
+    .rows { display: flex; flex-direction: column; gap: 8px; }
+    .row { display: flex; align-items: center; gap: 10px; background: var(--card); border-radius: 12px; padding: 10px 12px;
+        border: 2px solid transparent; }
+    .row.bad { border-color: var(--accent); background: var(--accent-soft); }
+    .row .n { width: 34px; color: var(--muted); font-size: 14px; }
+    .row .w { flex: 1; font-size: 26px; letter-spacing: 2px; }
+    .row button { border: none; background: none; font-size: 22px; padding: 4px 6px; }
+    .row .mark { min-width: 76px; padding: 8px 10px; border-radius: 10px; font-size: 16px; background: var(--ok-soft); color: var(--ok); }
+    .row.bad .mark { background: var(--accent); color: #fff; }
+    .score { text-align: center; font-size: 44px; font-weight: 700; margin: 6px 0; }
+    .score small { font-size: 18px; color: var(--muted); font-weight: 400; }
+
+    /* 錯字 */
+    .dots { font-size: 13px; color: var(--muted); }
+    .empty { text-align: center; color: var(--muted); padding: 30px 10px; }
+</style>
+</head>
+<body>
+<header>
+    <h1>📝 國語圈詞聽寫</h1>
+    <select id="lesson-select" onchange="changeLesson(this.value)" aria-label="選擇課次"></select>
+</header>
+<nav>
+    <button data-tab="study" class="active" onclick="showTab('study')">📖 背誦</button>
+    <button data-tab="dict" onclick="showTab('dict')">🎧 聽寫</button>
+    <button data-tab="wrong" onclick="showTab('wrong')">🔁 錯字<span class="badge" id="wrong-badge" hidden>0</span></button>
+</nav>
+<main>
+    <section id="tab-study" class="active"></section>
+    <section id="tab-dict"></section>
+    <section id="tab-wrong"></section>
+</main>
+
+<script src="dictation.js"></script>
+<script src="lesson07_data.js"></script>
+<script>
+    // ─── 狀態 ─────────────────────────────────────────
+    const PROGRESS_KEY = 'guoyu_progress';
+    const PREF_KEY = 'guoyu_prefs';
+    let lesson = LESSONS[LESSONS.length - 1];
+    let progress = loadJSON(PROGRESS_KEY) || emptyProgress();
+    let prefs = Object.assign({ pause: DICTATION.defaultPause, mode: 'all' }, loadJSON(PREF_KEY) || {});
+    let dict = { phase: 'setup', items: [], index: 0, token: 0, paused: false, marks: [] };
+    const audio = new Audio();
+
+    function loadJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+    function saveJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+    function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+    function wordHTML(word) {
+        return markNewChars(word, lesson.newChars)
+            .map(c => c.isNew ? `<span class="nc">${esc(c.ch)}</span>` : esc(c.ch)).join('');
+    }
+    function lessonWrongKeys() {
+        return lesson.items.map(it => itemKey(lesson.id, it.no)).filter(k => progress.wrong[k]);
+    }
+
+    // ─── 播音 ─────────────────────────────────────────
+    const pad2 = n => String(n).padStart(2, '0');
+    const wordSrc = (lid, no) => `audio/${lid}/${pad2(no)}.m4a`;
+    const sentSrc = (lid, no) => `audio/${lid}/${pad2(no)}_s.m4a`;
+    const numSrc = n => `audio/num/${n}.m4a`;
+
+    function stopAudio() {
+        audio.pause();
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+
+    // 播一段，播完才 resolve。音檔壞掉退瀏覽器語音；stepMaxMs 保險不卡死
+    function play(src, fallbackText) {
+        return new Promise(resolve => {
+            stopAudio();
+            let done = false;
+            const finish = () => { if (done) return; done = true; clearTimeout(guard); resolve(); };
+            const guard = setTimeout(finish, DICTATION.stepMaxMs);
+            const fallback = () => {
+                if (!fallbackText || !window.speechSynthesis) return finish();
+                const u = new SpeechSynthesisUtterance(fallbackText);
+                u.lang = 'zh-TW'; u.rate = 0.8; u.onend = finish; u.onerror = finish;
+                window.speechSynthesis.speak(u);
+            };
+            audio.onended = finish;
+            audio.onerror = fallback;
+            audio.src = src;
+            audio.play().catch(fallback);
+        });
+    }
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    // ─── 分頁 ─────────────────────────────────────────
+    function showTab(name) {
+        if (name !== 'dict' && dict.phase === 'running') endDictation();
+        document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+        document.querySelectorAll('main section').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+        if (name === 'study') renderStudy();
+        if (name === 'dict') renderDict();
+        if (name === 'wrong') renderWrong();
+    }
+
+    function changeLesson(id) {
+        lesson = LESSONS.find(l => l.id === id) || lesson;
+        endDictation();
+        dict.phase = 'setup';
+        refreshBadge();
+        const active = document.querySelector('nav button.active').dataset.tab;
+        showTab(active);
+    }
+
+    function refreshBadge() {
+        const n = lessonWrongKeys().length;
+        const b = document.getElementById('wrong-badge');
+        b.textContent = n;
+        b.hidden = n === 0;
+    }
+
+    // ─── 背誦 ─────────────────────────────────────────
+    function renderStudy() {
+        const el = document.getElementById('tab-study');
+        el.innerHTML = `
+            <p class="hint">點一下卡片聽發音。紅框是這課的生字，最容易寫錯。</p>
+            <div class="newchars">生字：<b>${esc(lesson.newChars)}</b></div>
+            <div class="grid">${lesson.items.map(it => {
+                const wrong = progress.wrong[itemKey(lesson.id, it.no)];
+                return `<button class="card" id="card-${it.no}" onclick="studyPlay(${it.no})">
+                    <div class="no">${it.no}</div>
+                    <div class="w">${wordHTML(it.word)}</div>
+                    ${wrong ? '<span class="wrongmark">🔁 錯過</span>' : ''}
+                </button>`;
+            }).join('')}</div>`;
+    }
+
+    async function studyPlay(no) {
+        document.querySelectorAll('.card.playing').forEach(c => c.classList.remove('playing'));
+        const card = document.getElementById('card-' + no);
+        card.classList.add('playing');
+        const it = lesson.items.find(i => i.no === no);
+        await play(wordSrc(lesson.id, no), it.word);
+        card.classList.remove('playing');
+    }
+
+    // ─── 聽寫：設定 ───────────────────────────────────
+    const MODES = [
+        { id: 'all', label: '全部照順序' },
+        { id: 'random', label: `隨機 ${DICTATION.randomCount} 題` },
+        { id: 'r1', label: '第 1–10', range: [1, 10] },
+        { id: 'r2', label: '第 11–20', range: [11, 20] },
+        { id: 'r3', label: '第 21–30', range: [21, 30] },
+        { id: 'wrong', label: '只考錯過的' },
+    ];
+
+    function quizFor(modeId) {
+        const m = MODES.find(x => x.id === modeId) || MODES[0];
+        if (m.range) return buildQuiz(lesson, 'range', { from: m.range[0], to: m.range[1] });
+        return buildQuiz(lesson, m.id, { progress });
+    }
+
+    function renderDict() {
+        const el = document.getElementById('tab-dict');
+        if (dict.phase === 'setup') {
+            const wrongN = lessonWrongKeys().length;
+            el.innerHTML = `
+                <p class="hint">準備好紙和筆。每題會念「第幾題、詞、課文句子、再念一次詞」，聽完寫在紙上，全部寫完再對答案。</p>
+                <div class="panel"><h2>考哪些？</h2><div class="opts">${MODES.map(m => {
+                    const n = m.id === 'wrong' ? wrongN : quizFor(m.id).length;
+                    return `<button class="opt ${prefs.mode === m.id ? 'sel' : ''}" ${n ? '' : 'disabled'}
+                        onclick="setPref('mode','${m.id}')">${m.label}${m.id === 'wrong' ? `（${n}）` : ''}</button>`;
+                }).join('')}</div></div>
+                <div class="panel"><h2>每題寫字時間</h2><div class="opts">${DICTATION.pauseOptions.map(s =>
+                    `<button class="opt ${prefs.pause === s ? 'sel' : ''}" onclick="setPref('pause',${s})">${s} 秒</button>`
+                ).join('')}</div></div>
+                <button class="big" id="dict-start" onclick="startDictation()" ${quizFor(prefs.mode).length ? '' : 'disabled'}>▶ 開始聽寫（${quizFor(prefs.mode).length} 題）</button>`;
+        } else if (dict.phase === 'running') {
+            el.innerHTML = `
+                <div class="panel stage">
+                    <div class="qno">第 <span id="d-no">${dict.index + 1}</span> 題</div>
+                    <div class="of">共 ${dict.items.length} 題</div>
+                    <div class="status" id="d-status"></div>
+                    <div class="bar"><div id="d-bar"></div></div>
+                    <div class="ctrls">
+                        <button onclick="replay()">🔁 再念一次</button>
+                        <button id="d-pause" onclick="togglePause()">⏸ 暫停</button>
+                        <button onclick="nextQuestion()">⏭ 下一題</button>
+                        <button class="stop" onclick="if (confirmEnd()) endDictation(true)">✖ 不考了</button>
+                    </div>
+                </div>`;
+        } else if (dict.phase === 'check') {
+            el.innerHTML = `
+                <p class="hint">拿紙對答案。寫錯的按一下變成 <b style="color:var(--accent)">✗</b>（筆畫、部首錯也算錯），對完按「完成批改」。</p>
+                <div class="rows">${dict.items.map((q, i) => `
+                    <div class="row ${dict.marks[i] ? '' : 'bad'}" id="row-${i}">
+                        <span class="n">${i + 1}</span>
+                        <span class="w">${wordHTML(q.word)}</span>
+                        <button onclick="play(wordSrc('${q.lessonId}',${q.no}),'${esc(q.word)}')" aria-label="聽">🔈</button>
+                        <button class="mark" onclick="toggleMark(${i})">${dict.marks[i] ? '✓ 對' : '✗ 錯'}</button>
+                    </div>`).join('')}</div>
+                <button class="big" style="margin-top:14px" onclick="finishCheck()">完成批改</button>`;
+        } else if (dict.phase === 'result') {
+            const total = dict.items.length;
+            const right = dict.marks.filter(Boolean).length;
+            const wrongItems = dict.items.filter((q, i) => !dict.marks[i]);
+            el.innerHTML = `
+                <div class="panel" style="text-align:center">
+                    <div class="score">${right}<small> / ${total}</small></div>
+                    <div>${right === total ? '🎉 全對！太厲害了' : `錯了 ${total - right} 個，已放進「🔁 錯字」`}</div>
+                </div>
+                ${wrongItems.length ? `<div class="panel"><h2>這次寫錯的</h2><div class="rows">${wrongItems.map(q =>
+                    `<div class="row bad"><span class="n">${q.no}</span><span class="w">${wordHTML(q.word)}</span></div>`).join('')}</div>
+                    <button class="big" style="margin-top:12px" onclick="retryWrong()">🔁 錯的再考一次</button></div>` : ''}
+                <button class="big" style="background:#8a7a72" onclick="dict.phase='setup'; renderDict()">回到聽寫設定</button>`;
+        }
+    }
+
+    function setPref(k, v) {
+        prefs[k] = v;
+        saveJSON(PREF_KEY, prefs);
+        renderDict();
+    }
+
+    function setStatus(msg) { const s = document.getElementById('d-status'); if (s) s.textContent = msg; }
+    function setBar(f) { const b = document.getElementById('d-bar'); if (b) b.style.width = (f * 100) + '%'; }
+
+    // ─── 聽寫：進行中 ─────────────────────────────────
+    function startDictation(items) {
+        items = items || quizFor(prefs.mode);
+        if (!items.length) return;
+        dict = { phase: 'running', items, index: 0, token: dict.token + 1, paused: false, marks: items.map(() => true) };
+        // 這一下是使用者手勢：讓共用的 <audio> 在手勢裡先 play 一次，iOS 之後才肯自動播
+        audio.muted = true;
+        audio.src = numSrc(1);
+        audio.play().then(() => audio.pause()).catch(() => {}).finally(() => { audio.muted = false; });
+        renderDict();
+        runQuestion(0, true);
+    }
+
+    async function readItem(q, number, alive) {
+        const steps = [];
+        if (number) steps.push([numSrc(number), `第${number}題`]);
+        steps.push([wordSrc(q.lessonId, q.no), q.word]);
+        steps.push([sentSrc(q.lessonId, q.no), null]);
+        steps.push([wordSrc(q.lessonId, q.no), q.word]);
+        for (const [src, text] of steps) {
+            if (!alive()) return;
+            await play(src, text);
+            if (!alive()) return;
+            await sleep(DICTATION.stepGapMs);
+        }
+    }
+
+    // 倒數：暫停時不扣時間
+    function countdown(ms, alive) {
+        return new Promise(resolve => {
+            let left = ms, last = Date.now();
+            const tick = setInterval(() => {
+                const now = Date.now();
+                if (!dict.paused) left -= now - last;
+                last = now;
+                setBar(Math.max(0, left) / ms);
+                if (!alive() || left <= 0) { clearInterval(tick); resolve(); }
+            }, 100);
+        });
+    }
+
+    async function runQuestion(i, withNumber) {
+        const token = ++dict.token;
+        const alive = () => dict.token === token && dict.phase === 'running';
+        dict.index = i;
+        dict.paused = false;
+        const no = document.getElementById('d-no'); if (no) no.textContent = i + 1;
+        const pb = document.getElementById('d-pause'); if (pb) pb.textContent = '⏸ 暫停';
+        setBar(1);
+        setStatus('🔊 仔細聽…');
+        await readItem(dict.items[i], withNumber ? i + 1 : null, alive);
+        if (!alive()) return;
+        setStatus('✏️ 寫在紙上');
+        await countdown(prefs.pause * 1000, alive);
+        if (!alive()) return;
+        nextQuestion();
+    }
+
+    function replay() {
+        if (dict.phase !== 'running') return;
+        stopAudio();
+        runQuestion(dict.index, false);
+    }
+
+    function togglePause() {
+        if (dict.phase !== 'running') return;
+        dict.paused = !dict.paused;
+        document.getElementById('d-pause').textContent = dict.paused ? '▶ 繼續' : '⏸ 暫停';
+        if (dict.paused) { stopAudio(); setStatus('⏸ 暫停中'); }
+        else setStatus('✏️ 寫在紙上');
+    }
+
+    function nextQuestion() {
+        if (dict.phase !== 'running') return;
+        stopAudio();
+        if (dict.index + 1 < dict.items.length) runQuestion(dict.index + 1, true);
+        else { dict.token++; dict.phase = 'check'; renderDict(); }
+    }
+
+    function confirmEnd() {
+        // 不用 confirm()（iPad 加到主畫面時會卡住），第一次按先提示、三秒內再按一次才結束
+        if (dict.endArmed) return true;
+        dict.endArmed = true;
+        setStatus('再按一次「不考了」就結束');
+        setTimeout(() => { dict.endArmed = false; }, 3000);
+        return false;
+    }
+
+    function endDictation(rerender) {
+        dict.token++;
+        stopAudio();
+        if (dict.phase === 'running') dict.phase = 'setup';
+        if (rerender) renderDict();
+    }
+
+    // ─── 聽寫：對答案 ─────────────────────────────────
+    function toggleMark(i) {
+        dict.marks[i] = !dict.marks[i];
+        const row = document.getElementById('row-' + i);
+        row.classList.toggle('bad', !dict.marks[i]);
+        row.querySelector('.mark').textContent = dict.marks[i] ? '✓ 對' : '✗ 錯';
+    }
+
+    function finishCheck() {
+        progress = applyResults(progress, dict.items.map((q, i) => ({ key: q.key, ok: dict.marks[i] })));
+        saveJSON(PROGRESS_KEY, progress);
+        refreshBadge();
+        dict.phase = 'result';
+        renderDict();
+        window.scrollTo(0, 0);
+    }
+
+    function retryWrong() {
+        startDictation(shuffle(dict.items.filter((q, i) => !dict.marks[i])));
+    }
+
+    // ─── 錯字複習 ─────────────────────────────────────
+    function renderWrong() {
+        const el = document.getElementById('tab-wrong');
+        const keys = lessonWrongKeys();
+        if (!keys.length) {
+            el.innerHTML = `<div class="empty">目前沒有錯過的詞 👍<br>聽寫寫錯的會自動放到這裡。</div>`;
+            return;
+        }
+        el.innerHTML = `
+            <p class="hint">寫錯的詞會留在這裡，之後聽寫連續寫對 ${DICTATION.graduateStreak} 次就會移出。</p>
+            <div class="rows">${keys.map(k => {
+                const no = Number(k.split('-')[1]);
+                const it = lesson.items.find(i => i.no === no);
+                const h = progress.history[k] || { right: 0, wrong: 0 };
+                const s = progress.wrong[k].streak;
+                return `<div class="row">
+                    <span class="n">${no}</span>
+                    <span class="w">${wordHTML(it.word)}</span>
+                    <span class="dots">${'●'.repeat(s)}${'○'.repeat(DICTATION.graduateStreak - s)}<br>錯 ${h.wrong} 次</span>
+                    <button onclick="play(wordSrc('${lesson.id}',${no}),'${esc(it.word)}')" aria-label="聽">🔈</button>
+                </div>`;
+            }).join('')}</div>
+            <button class="big" style="margin-top:14px" onclick="prefs.mode='wrong'; saveJSON(PREF_KEY,prefs); showTab('dict'); startDictation()">🎧 聽寫這 ${keys.length} 個</button>`;
+    }
+
+    // ─── 啟動 ─────────────────────────────────────────
+    document.getElementById('lesson-select').innerHTML =
+        LESSONS.map(l => `<option value="${l.id}" ${l === lesson ? 'selected' : ''}>${esc(l.title)}</option>`).join('');
+    refreshBadge();
+    renderStudy();
+
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+</script>
+</body>
+</html>
