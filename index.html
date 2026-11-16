@@ -378,7 +378,7 @@
     // 格子可能排成多列（見 padLayout），座標 x 在 0..cols、y 在 0..rows。排法整場考試固定（dict.padLayout），
     // 對答案時才能照同樣的排法重畫。
     const pad = { canvas: null, ctx: null, box: 0, boxes: 4, cols: 4, rows: 1, strokes: [], cur: null, curId: null, penSeen: false, lastInk: 0 };
-    const PAD_TOOLS_H = 80;   // 格子下面「擦掉」那排按鈕＋留白的高度
+    const PAD_TOOLS_H = 100;  // 格子下面「擦掉」那排按鈕＋卡片留白的高度（80 會差一點點要捲動）
     const PAD_MAX_BOX = 320;
 
     function padInit(strokes) {
