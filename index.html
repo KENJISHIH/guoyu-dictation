@@ -97,7 +97,8 @@
     .padtools button { padding: 10px 18px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-size: 16px; }
     .row.ink-row { flex-wrap: wrap; }
     .row .inkbox { flex-basis: 100%; display: flex; align-items: center; gap: 8px; padding-left: 44px; color: var(--muted); font-size: 13px; }
-    .row canvas.ink { background: #fff; border-radius: 4px; }
+    .row canvas.ink { background: #fff; border-radius: 4px; min-width: 0; max-width: 100%; height: auto !important; }
+    @media (max-width: 500px) { .row .inkbox { padding-left: 0; } }
 
     /* 錯字 */
     .dots { font-size: 13px; color: var(--muted); }
