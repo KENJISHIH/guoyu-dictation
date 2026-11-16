@@ -19,7 +19,9 @@
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { margin: 0; background: var(--bg); color: var(--ink);
-        font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+        font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+        /* 整站不給選取：iPad 用 Pencil 手寫時，Safari 會把筆畫當成選字，選單跳出來就中斷筆畫（2026-11-16 實機） */
+        -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     header { padding: 14px 16px 6px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     header h1 { font-size: 20px; margin: 0; flex: 1; }
     select, button { font: inherit; touch-action: manipulation; }
@@ -390,8 +392,18 @@
         c.onpointerdown = padDown;
         c.onpointermove = padMove;
         c.onpointerup = c.onpointercancel = padUp;
+        // iPad Safari：只靠 touch-action 擋不住 Pencil 的選字／放大鏡／Scribble 手勢，
+        // 要在 touch 事件上 preventDefault（必須 passive: false），筆畫才不會被中途取消
+        if (!c.dataset.bound) {
+            const block = e => { if (e.cancelable) e.preventDefault(); };
+            ['touchstart', 'touchmove', 'touchend'].forEach(t => c.addEventListener(t, block, { passive: false }));
+            c.dataset.bound = '1';
+        }
         padRedraw();
     }
+
+    // 保險：任何地方開始選字都擋掉
+    document.addEventListener('selectstart', e => e.preventDefault());
 
     function sizeCanvas(c, w, h) {
         const dpr = window.devicePixelRatio || 1;
@@ -455,6 +467,7 @@
         if (e.pointerType === 'touch' && pad.penSeen) return;   // 用過筆之後，手掌／手指不算
         if (pad.cur) return;
         e.preventDefault();
+        try { window.getSelection().removeAllRanges(); } catch (err) {}
         try { pad.canvas.setPointerCapture(e.pointerId); } catch (err) {}
         pad.curId = e.pointerId;
         pad.cur = [padPoint(e)];
