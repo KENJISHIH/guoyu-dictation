@@ -487,16 +487,16 @@
     function padUndo() { pad.strokes.pop(); padRedraw(); }
     function padClear() { pad.strokes.splice(0); padRedraw(); }
 
-    // 對答案時重畫她寫的字（固定 48px 一格）
+    // 對答案時重畫她寫的字（固定 72px 一格，太小看不出筆畫錯）
     function renderInk(c, strokes) {
-        const box = 48, boxes = padBoxes(lesson);
+        const box = 72, boxes = padBoxes(lesson);
         sizeCanvas(c, box * boxes, box);
         const ctx = c.getContext('2d');
         drawGrid(ctx, box, boxes);
         if (!strokes || !strokes.length) {
             ctx.fillStyle = '#b9a9a0';
             ctx.font = '14px sans-serif';
-            ctx.fillText('（沒寫）', 8, box / 2 + 5);
+            ctx.fillText('（沒寫）', 10, box / 2 + 5);
             return;
         }
         drawStrokes(ctx, box, strokes);
