@@ -30,6 +30,7 @@
     nav button.active { background: var(--accent); color: #fff; }
     .badge { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px;
         background: var(--accent); color: #fff; font-size: 12px; margin-left: 4px; }
+    .badge[hidden] { display: none; }
     nav button.active .badge { background: #fff; color: var(--accent); }
     main { padding: 0 16px 40px; max-width: 760px; margin: 0 auto; }
     section { display: none; }
@@ -337,12 +338,14 @@
         const alive = () => dict.token === token && dict.phase === 'running';
         dict.index = i;
         dict.paused = false;
+        dict.stage = 'reading';
         const no = document.getElementById('d-no'); if (no) no.textContent = i + 1;
         const pb = document.getElementById('d-pause'); if (pb) pb.textContent = '⏸ 暫停';
         setBar(1);
         setStatus('🔊 仔細聽…');
         await readItem(dict.items[i], withNumber ? i + 1 : null, alive);
         if (!alive()) return;
+        dict.stage = 'writing';
         setStatus('✏️ 寫在紙上');
         await countdown(prefs.pause * 1000, alive);
         if (!alive()) return;
@@ -359,8 +362,16 @@
         if (dict.phase !== 'running') return;
         dict.paused = !dict.paused;
         document.getElementById('d-pause').textContent = dict.paused ? '▶ 繼續' : '⏸ 暫停';
-        if (dict.paused) { stopAudio(); setStatus('⏸ 暫停中'); }
-        else setStatus('✏️ 寫在紙上');
+        if (dict.paused) {
+            // 念到一半暫停：直接中斷這輪播音（不然要等 stepMaxMs 才會繼續下一段），繼續時整題重念
+            if (dict.stage === 'reading') dict.token++;
+            stopAudio();
+            setStatus('⏸ 暫停中');
+        } else if (dict.stage === 'reading') {
+            runQuestion(dict.index, false);
+        } else {
+            setStatus('✏️ 寫在紙上');
+        }
     }
 
     function nextQuestion() {
