@@ -334,7 +334,7 @@
         items = items || quizFor(prefs.mode);
         if (!items.length) return;
         dict = { phase: 'running', items, index: 0, token: dict.token + 1, paused: false, marks: items.map(() => true),
-            ink: items.map(() => []), onPad: prefs.writeOn === 'pad' };
+            ink: items.map(() => []), onPad: prefs.writeOn === 'pad', padLayout: null };
         // 這一下是使用者手勢：讓共用的 <audio> 在手勢裡先 play 一次，iOS 之後才肯自動播
         audio.muted = true;
         audio.src = numSrc(1);
@@ -375,7 +375,11 @@
     // ─── iPad 手寫板 ──────────────────────────────────
     // 筆跡存成向量：每筆 [[x, y, 壓力]...]，座標以「一格」為 1（整列寬 = 格數），
     // 對答案時用同一份資料縮小重畫。偵測到 Apple Pencil 之後就不吃手指／手掌（防誤觸）。
-    const pad = { canvas: null, ctx: null, box: 0, boxes: 4, strokes: [], cur: null, curId: null, penSeen: false, lastInk: 0 };
+    // 格子可能排成多列（見 padLayout），座標 x 在 0..cols、y 在 0..rows。排法整場考試固定（dict.padLayout），
+    // 對答案時才能照同樣的排法重畫。
+    const pad = { canvas: null, ctx: null, box: 0, boxes: 4, cols: 4, rows: 1, strokes: [], cur: null, curId: null, penSeen: false, lastInk: 0 };
+    const PAD_TOOLS_H = 80;   // 格子下面「擦掉」那排按鈕＋留白的高度
+    const PAD_MAX_BOX = 320;
 
     function padInit(strokes) {
         const c = document.getElementById('pad');
@@ -385,9 +389,14 @@
         pad.cur = null;
         pad.lastInk = 0;
         pad.boxes = padBoxes(lesson);
-        const avail = c.parentElement.clientWidth;
-        pad.box = Math.max(60, Math.min(170, Math.floor(avail / pad.boxes)));
-        sizeCanvas(c, pad.box * pad.boxes, pad.box);
+        if (!dict.padLayout) {
+            const top = c.getBoundingClientRect().top + window.scrollY;
+            const availW = c.parentElement.clientWidth;
+            const availH = Math.max(120, window.innerHeight - top - PAD_TOOLS_H);
+            dict.padLayout = padLayout(pad.boxes, availW, availH, PAD_MAX_BOX);
+        }
+        ({ cols: pad.cols, rows: pad.rows, box: pad.box } = dict.padLayout);
+        sizeCanvas(c, pad.box * pad.cols, pad.box * pad.rows);
         pad.ctx = c.getContext('2d');
         c.onpointerdown = padDown;
         c.onpointermove = padMove;
@@ -415,24 +424,26 @@
     }
 
     // 田字格：每格實線外框＋虛線十字
-    function drawGrid(ctx, box, boxes) {
+    function drawGrid(ctx, box, boxes, cols) {
+        const cells = Array.from({ length: boxes }, (_, i) => [(i % cols) * box, Math.floor(i / cols) * box]);
         ctx.save();
         ctx.strokeStyle = '#e3b3ae';
         ctx.lineWidth = 1.5;
-        for (let i = 0; i < boxes; i++) ctx.strokeRect(i * box + 0.75, 0.75, box - 1.5, box - 1.5);
+        for (const [x, y] of cells) ctx.strokeRect(x + 0.75, y + 0.75, box - 1.5, box - 1.5);
         ctx.setLineDash([4, 4]);
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for (let i = 0; i < boxes; i++) {
-            ctx.moveTo(i * box + box / 2, 0); ctx.lineTo(i * box + box / 2, box);
-            ctx.moveTo(i * box, box / 2); ctx.lineTo(i * box + box, box / 2);
+        for (const [x, y] of cells) {
+            ctx.moveTo(x + box / 2, y); ctx.lineTo(x + box / 2, y + box);
+            ctx.moveTo(x, y + box / 2); ctx.lineTo(x + box, y + box / 2);
         }
         ctx.stroke();
         ctx.restore();
     }
 
     function drawSegment(ctx, box, a, b) {
-        ctx.lineWidth = box * 0.04 * (0.55 + b[2] * 0.9);
+        // 線寬跟著格子大小走，格子大到 300px 也不會太粗
+        ctx.lineWidth = Math.min(box * 0.04, 9) * (0.55 + b[2] * 0.9);
         ctx.beginPath();
         ctx.moveTo(a[0] * box, a[1] * box);
         ctx.lineTo(b[0] * box, b[1] * box);
@@ -450,9 +461,9 @@
     }
 
     function padRedraw() {
-        const { ctx, box, boxes } = pad;
-        ctx.clearRect(0, 0, box * boxes, box);
-        drawGrid(ctx, box, boxes);
+        const { ctx, box, boxes, cols, rows } = pad;
+        ctx.clearRect(0, 0, box * cols, box * rows);
+        drawGrid(ctx, box, boxes, cols);
         drawStrokes(ctx, box, pad.strokes);
     }
 
@@ -502,11 +513,24 @@
     function padClear() { pad.strokes.splice(0); padRedraw(); }
 
     // 對答案時重畫她寫的字（固定 72px 一格，太小看不出筆畫錯）
+    // 寫的時候若排成 2×2，對答案時攤平成一橫排（照第 1、2、3、4 格的順序），比較好跟正解對照。
+    // 每一筆依「起筆落在哪一格」整筆搬過去
+    function flattenStrokes(strokes, cols) {
+        return strokes.map(s => {
+            const col = Math.min(cols - 1, Math.max(0, Math.floor(s[0][0])));
+            const row = Math.max(0, Math.floor(s[0][1]));
+            const idx = row * cols + col;
+            return s.map(([x, y, p]) => [x - col + idx, y - row, p]);
+        });
+    }
+
     function renderInk(c, strokes) {
         const box = 72, boxes = padBoxes(lesson);
+        const cols = dict.padLayout ? dict.padLayout.cols : boxes;
+        if (strokes && cols < boxes) strokes = flattenStrokes(strokes, cols);
         sizeCanvas(c, box * boxes, box);
         const ctx = c.getContext('2d');
-        drawGrid(ctx, box, boxes);
+        drawGrid(ctx, box, boxes, boxes);
         if (!strokes || !strokes.length) {
             ctx.fillStyle = '#b9a9a0';
             ctx.font = '14px sans-serif';

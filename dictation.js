@@ -19,6 +19,18 @@ function padBoxes(lesson) {
     return Math.max(DICTATION.minPadBoxes, longest);
 }
 
+// 手寫格怎麼排：在可用寬高內試每一種欄數（4×1、2×2、1×4…），挑格子最大的；平手取欄數多的（較少換行）
+// iPad 直拿時 4 格一橫排只有約 170px，排 2×2 可到約 280px（2026-11-16 Kenji 要格子大一點）
+function padLayout(boxes, availW, availH, maxBox) {
+    let best = null;
+    for (let cols = boxes; cols >= 1; cols--) {
+        const rows = Math.ceil(boxes / cols);
+        const box = Math.floor(Math.min(availW / cols, availH / rows, maxBox || Infinity));
+        if (!best || box > best.box) best = { cols, rows, box };
+    }
+    return best;
+}
+
 // 倒數結束了沒：時間到，而且（不是手寫模式，或筆已離開且離最後一筆超過 inkGraceMs）
 function countdownDone(leftMs, now, ink) {
     if (leftMs > 0) return false;
@@ -103,5 +115,5 @@ function markNewChars(word, newChars) {
 }
 
 if (typeof module !== 'undefined') {
-    module.exports = { DICTATION, LESSONS, registerLesson, itemKey, shuffle, buildQuiz, emptyProgress, applyResults, markNewChars, padBoxes, countdownDone };
+    module.exports = { DICTATION, LESSONS, registerLesson, itemKey, shuffle, buildQuiz, emptyProgress, applyResults, markNewChars, padBoxes, padLayout, countdownDone };
 }

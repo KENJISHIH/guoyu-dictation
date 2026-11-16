@@ -88,6 +88,16 @@ t('手寫格子：第七課最長 4 字 → 4 格；短課也至少 4 格；長�
     assert.strictEqual(D.padBoxes({ items: [{ word: '老街' }] }), 4);
     assert.strictEqual(D.padBoxes({ items: [{ word: '一二三四五' }] }), 5);
 });
+t('手寫格排法：iPad 直拿（寬 650、高 560）排 2×2 約 280px', () => {
+    assert.deepStrictEqual(D.padLayout(4, 650, 560, 320), { cols: 2, rows: 2, box: 280 });
+});
+t('手寫格排法：高度不夠（橫拿）就 4 格一排', () => {
+    assert.deepStrictEqual(D.padLayout(4, 1000, 260, 320), { cols: 4, rows: 1, box: 250 });
+});
+t('手寫格排法：不超過上限、5 格會排 3+2', () => {
+    assert.strictEqual(D.padLayout(4, 2000, 2000, 320).box, 320);
+    assert.deepStrictEqual(D.padLayout(5, 650, 560, 320), { cols: 3, rows: 2, box: 216 });
+});
 t('倒數：紙上模式時間到就結束', () => {
     assert.strictEqual(D.countdownDone(100, 0, null), false);
     assert.strictEqual(D.countdownDone(0, 0, null), true);
